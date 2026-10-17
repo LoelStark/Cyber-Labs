@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber-Labs · Lab 004 — Eyes on Glass: Log Analysis and Detection Engineering (Interactive)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2a3342;
+    --text: #d7dee8;
+    --dim: #8b98a9;
+    --accent: #4ea1ff;
+    --accent2: #57d9a3;
+    --gold: #f0c000;
+    --red: #ff6b6b;
+    --mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #16202e 0%, #10151f 100%);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px; margin-bottom: 20px; position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 20%, rgba(78,161,255,.12), transparent 55%);
+    pointer-events: none;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; position: relative; }
+  .badge {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(78,161,255,.12); color: var(--accent);
+    border: 1px solid rgba(78,161,255,.3);
+  }
+  .badge.green { background: rgba(87,217,163,.1); color: var(--accent2); border-color: rgba(87,217,163,.3); }
+  .badge.gold { background: rgba(240,192,0,.1); color: var(--gold); border-color: rgba(240,192,0,.3); }
+  h1 { font-size: 28px; font-weight: 700; position: relative; letter-spacing: -.01em; }
+  h1 .lab-no { color: var(--accent); font-family: var(--mono); }
+  .subtitle { color: var(--dim); margin-top: 6px; font-size: 15px; position: relative; }
+  .progress-shell { margin-top: 20px; position: relative; }
+  .progress-track { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .4s ease; }
+  .progress-label { font-size: 12.5px; color: var(--dim); margin-top: 8px; font-family: var(--mono); }
+
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  nav {
+    position: sticky; top: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  }
+  nav a {
+    display: block; padding: 8px 12px; border-radius: 8px;
+    color: var(--dim); text-decoration: none; font-size: 13.5px; transition: all .15s;
+  }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav a.active { background: rgba(78,161,255,.12); color: var(--accent); font-weight: 600; }
+  nav .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); padding: 6px 12px 8px; font-weight: 700; }
+
+  section { margin-bottom: 24px; scroll-margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  h2 .num {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(78,161,255,.1); border: 1px solid rgba(78,161,255,.25);
+    width: 28px; height: 28px; border-radius: 8px; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  h3 { font-size: 15px; font-weight: 650; margin: 16px 0 8px; color: var(--text); }
+  p { margin-bottom: 10px; color: #c3ccd8; font-size: 14.5px; }
+  p.dim, .dim { color: var(--dim); font-size: 13.5px; }
+  ul { margin: 8px 0 12px 20px; }
+  li { margin-bottom: 6px; font-size: 14px; color: #c3ccd8; }
+  strong { color: var(--text); }
+  code { font-family: var(--mono); font-size: 12.5px; background: rgba(78,161,255,.08); padding: 1px 5px; border-radius: 4px; color: #9ecbff; }
+
+  .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 12px 0; }
+  .concept { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .concept .c-title { font-weight: 650; font-size: 13.5px; color: var(--accent2); margin-bottom: 4px; }
+  .concept .c-body { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+
+  .task {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px; transition: border-color .2s;
+  }
+  .task:hover { border-color: rgba(78,161,255,.35); }
+  .task.done { opacity: .62; }
+  .task.done .task-title { text-decoration: line-through; }
+  .task input[type=checkbox] {
+    appearance: none; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 6px; cursor: pointer; position: relative; transition: all .15s;
+  }
+  .task input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .task input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-weight: 650; font-size: 14.5px; margin-bottom: 3px; }
+  .task-desc { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .cmd-block { position: relative; margin-top: 6px; }
+  pre {
+    background: #0a0e14; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 44px 10px 12px; overflow-x: auto; color: #9ecbff; line-height: 1.55;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  pre .comment { color: #5a6a80; }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--dim);
+    font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    font-family: var(--mono); transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+  textarea {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+    resize: vertical; min-height: 90px; outline: none; transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .field-label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin: 10px 0 6px; }
+
+  .qa { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .qa .q { font-weight: 650; font-size: 14px; margin-bottom: 8px; color: var(--text); }
+  .qa .q .qn { color: var(--gold); font-family: var(--mono); margin-right: 8px; }
+  .qa textarea { min-height: 70px; }
+
+  .deliverable {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 14px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px; font-size: 13.5px;
+  }
+  .deliverable .fname { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .deliverable .fdesc { color: var(--dim); font-size: 12.5px; margin-left: auto; text-align: right; }
+
+  .check-row {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13.5px; color: #c3ccd8;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row input[type=checkbox] {
+    appearance: none; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 5px; cursor: pointer; position: relative;
+  }
+  .check-row input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .check-row input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+
+  .rules {
+    background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;
+  }
+  .rules .r-title { color: var(--red); font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .rules ul { margin: 4px 0 0 18px; }
+  .rules li { font-size: 13px; color: #d8b0b0; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: all .15s; font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 4px 0; user-select: none; }
+  summary:hover { text-decoration: underline; }
+  details .detail-body { padding: 10px 0 4px; font-size: 13px; color: var(--dim); }
+
+  footer { text-align: center; color: #5f6c80; font-size: 12px; margin-top: 40px; font-family: var(--mono); }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel); border: 1px solid var(--accent2); color: var(--accent2);
+    padding: 10px 22px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; transition: all .3s ease; pointer-events: none; z-index: 50;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge-row">
+      <span class="badge">LAB 004</span>
+      <span class="badge gold">Intermediate (Level 4)</span>
+      <span class="badge green">90 minutes</span>
+      <span class="badge">SIEM &amp; log analysis · defensive security &amp; incident response · Bash/Python security automation</span>
+    </div>
+    <h1><span class="lab-no">//</span> Eyes on Glass: Log Analysis and Detection Engineering</h1>
+    <div class="subtitle">You are the sole security engineer for a small company. At 09:00 Monday, a developer mentions their account "signed out randomly" over the weekend. Nothing else. No alerts — you have no SIEM yet. You ...</div>
+    <div class="progress-shell">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 of 10 tasks complete</div>
+    </div>
+  </header>
+
+  <div class="rules">
+    <div class="r-title">⚠ RULES OF ENGAGEMENT — NON-NEGOTIABLE</div>
+    <ul>
+      <li>Everything runs on your machine. The logs are generated locally by <code>gen_logs.py</code>.</li>
+      <li>Never point <code>detect.py</code> at production logs you do not own or have authorisation to read.</li>
+      <li>Do not upload the sample logs to public scanning or analysis services — they are fine,</li>
+      <li>Redact real IPs, usernames, and hostnames before any public writeup, always.</li>
+    </ul>
+  </div>
+
+  <div class="grid">
+    <nav id="sideNav">
+      <div class="nav-title">Navigate</div>
+      <a href="#brief" class="active">Briefing</a>
+      <a href="#concepts">Concepts</a>
+      <a href="#tasks">Tasks <span id="navTaskCount" style="float:right;font-family:var(--mono);font-size:11px">0/10</span></a>
+      <a href="#deliverables">Deliverables</a>
+      <a href="#validation">Self-Check</a>
+      <a href="#assessment">Assessment</a>
+      <a href="#notes">Lab Notes</a>
+    </nav>
+
+    <div>
+      <section id="brief">
+        <div class="card">
+          <h2><span class="num">01</span> Briefing</h2>
+          <p>Learn the core defensive trade: turn raw logs into detections. You will parse real-format logs (<code>auth.log</code>, web access logs), find an attack buried in them, correlate events across two sources, and write a detection rule that would have caught it automatically. The detection is the deliverable — an analyst who can only read logs is a librarian; an analyst who can write a rule is a detector.</p>
+          <p>You are the sole security engineer for a small company. At 09:00 Monday, a developer mentions their account "signed out randomly" over the weekend. Nothing else. No alerts — you have no SIEM yet. You have two log files from the weekend: - <code>auth.log</code> — SSH authentication events from the office server - <code>access.log</code> — web server access logs from the same server Your job: find what happened, prove it, and build the detection that should have fired.</p>
+          <h3>Environment</h3>
+          <ul>
+          <li>```bash</li>
+          <li>mkdir -p ~/cybersec-labs/lab004 && cd ~/cybersec-labs/lab004</li>
+          <li>```</li>
+          <li>Tools: <code>python3</code> (stdlib only), <code>bash</code>, <code>grep</code>, <code>awk</code>. No installs required.</li>
+          <li><strong>Generate the sample logs</strong> (synthetic, benign, generated on your machine):</li>
+          <li>```bash</li>
+          <li>cat > gen_logs.py << 'EOF'</li>
+          <li>"""Generate synthetic auth.log + access.log with an embedded attack.</li>
+          <li>Level 4 lab sample data — no real systems, no real payloads."""</li>
+          <li>import random</li>
+          <li>from datetime import datetime, timedelta</li>
+          <li>random.seed(44)</li>
+          <li>base = datetime(2026, 10, 10, 0, 0, 0)  # Saturday</li>
+          <li>lines_auth, lines_web = [], []</li>
+          <li>def ts(dt):</li>
+          <li>return dt.strftime("%b %d %H:%M:%S")</li>
+          <li>for _ in range(6):</li>
+          <li>t = base + timedelta(minutes=random.randint(30, 3000))</li>
+          <li>ip = random.choice(["192.168.1.50", "192.168.1.77", "10.0.0.12"])</li>
+          <li>lines_auth.append((t, f"{ts(t)} office-server sshd[{random.randint(2000,9000)}]: Accepted publickey for dev from {ip} port {random.randint(40000,60000)} ssh2"))</li>
+          <li>attack_start = base + timedelta(hours=14, minutes=37)</li>
+          <li>for i in range(220):</li>
+          <li>t = attack_start + timedelta(seconds=random.randint(0, 900))</li>
+          <li>lines_auth.append((t, f"{ts(t)} office-server sshd[{random.randint(9000,9999)}]: Failed password for invalid user admin from 203.0.113.66 port {random.randint(1024,65000)} ssh2"))</li>
+          <li>for i in range(180):</li>
+          <li>t = attack_start + timedelta(seconds=random.randint(0, 900))</li>
+          <li>lines_auth.append((t, f"{ts(t)} office-server sshd[{random.randint(9000,9999)}]: Failed password for root from 203.0.113.66 port {random.randint(1024,65000)} ssh2"))</li>
+          <li>success = attack_start + timedelta(seconds=915)</li>
+          <li>lines_auth.append((success, f"{ts(success)} office-server sshd[4242]: Accepted password for root from 203.0.113.66 port 55555 ssh2"))</li>
+          <li>for path in ["/admin", "/wp-login.php", "/.env", "/api/users", "/cgi-bin/test.cgi", "/phpmyadmin/"]:</li>
+          <li>t = success + timedelta(minutes=3, seconds=random.randint(10, 300))</li>
+          <li>lines_web.append((t, f'{ts(t)} web access: 203.0.113.66 "GET {path} HTTP/1.1" 404 152 "-" "python-requests/2.31"'))</li>
+          <li>for _ in range(300):</li>
+          <li>t = base + timedelta(minutes=random.randint(0, 2880))</li>
+          <li>lines_web.append((t, f'{ts(t)} web access: 192.168.1.{random.randint(2,200)} "GET / HTTP/1.1" 200 4210 "-" "Mozilla/5.0"'))</li>
+          <li>for name, buf in [("auth.log", lines_auth), ("access.log", lines_web)]:</li>
+          <li>buf.sort(key=lambda x: x[0])</li>
+          <li>with open(name, "w") as f:</li>
+          <li>for _, line in buf:</li>
+          <li>f.write(line + "\n")</li>
+          <li>print("Wrote auth.log and access.log — happy hunting.")</li>
+          <li>EOF</li>
+          <li>python3 gen_logs.py</li>
+          <li>```</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="concepts">
+        <div class="card">
+          <h2><span class="num">02</span> Concept Primer</h2>
+          <p class="dim">Read before starting — these ideas frame every task below.</p>
+          <div class="concepts">
+            <div class="concept">
+              <div class="c-title">Logs are event streams, not files</div>
+              <div class="c-body">A log file is a sequence of timestamped facts. Your first job is always to parse into structure: time, actor, action, outcome. `grep` reads; Python *analyses*. For anything above one-off questions, write a parser.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">The volume vs. the pattern</div>
+              <div class="c-body">220 failed logins from one IP is not interesting. 400 failed logins followed by ONE success from the same IP is the whole story. Detection is about *sequences*, not counts.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Correlation across sources</div>
+              <div class="c-body">auth.log says the IP got in. access.log says what it did after. One source alone is a rumour; two sources agreeing is evidence. The timestamp is the join key.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Detection rule anatomy</div>
+              <div class="c-body">A usable detection has four parts: the *condition* (what pattern in the data), the *scope* (which host/service), the *rationale* (why it means attack), and the *false positive profile* (what legit behaviour looks identical — and how you distinguish it). A rule that fires 50 times a day gets muted; muted rules detect nothing.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Timeline reconstruction</div>
+              <div class="c-body">When you write the incident report, order every event by time, mark the source, and separate fact ("at 14:52:01 SSH succeeded for root from 203.0.113.66") from inference ("this was the attacker").</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <div class="card">
+          <h2><span class="num">03</span> Tasks <span class="dim" style="font-weight:400;font-size:13px">— do these in order</span></h2>
+          <p class="dim" style="margin-bottom:14px">Write down every command you run and its key output — your deliverable depends on the evidence, not on the answers. Click a command block to copy it.</p>
+          <div id="taskList">
+            <div class="task" data-task="0">
+              <input type="checkbox" id="t0">
+              <div class="task-body">
+                <div class="task-title">1 · Get oriented · Phase 1: Triage (20 min)</div>
+                <div class="task-desc">Count the lines in each file, then look at the shape of the data.</div>
+<div class="cmd-block">
+                  <pre>wc -l auth.log access.log
+   head -5 auth.log
+   tail -5 auth.log</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+                <details>
+                  <summary>Hint</summary>
+                  <div class="detail-body">Hint:: Every analyst starts with size and format. You cannot search what you have not sized.</div>
+                </details>
+              </div>
+            </div>
+            <div class="task" data-task="1">
+              <input type="checkbox" id="t1">
+              <div class="task-body">
+                <div class="task-title">2 · Extract failed logins by source IP · Phase 1: Triage (20 min)</div>
+                <div class="task-desc">A one-liner gets you 80% of the way: Then do it properly in Python (<code>parse_auth.py</code>): extract timestamp, user, result (accepted/failed), and source IP into structured records. Print the top talkers.</div>
+<div class="cmd-block">
+                  <pre>grep "Failed password" auth.log | grep -oP 'from \K[0-9.]+' | sort | uniq -c | sort -rn | head</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="2">
+              <input type="checkbox" id="t2">
+              <div class="task-body">
+                <div class="task-title">3 · Find the brute-force window · Phase 1: Triage (20 min)</div>
+                <div class="task-desc">For the noisiest IP, list the first and last failed attempt and the total count. Is this a human fat-fingering a password, or automation? State your evidence.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="3">
+              <input type="checkbox" id="t3">
+              <div class="task-body">
+                <div class="task-title">4 · Did the noisy IP ever succeed? · Phase 2: Correlation (25 min)</div>
+                <div class="task-desc">Parse auth.log for <em>accepted</em> logins from that IP. What user, what time, what port? This single line changes the whole investigation — if it is there, everything before it is noise and everything after is post-exploitation.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="4">
+              <input type="checkbox" id="t4">
+              <div class="task-body">
+                <div class="task-title">5 · Join against access.log · Phase 2: Correlation (25 min)</div>
+                <div class="task-desc">For the 30 minutes after the successful login, what does the web log show from that IP? Write a Python script that merges both sources into one timeline sorted by timestamp. The web log's format differs — parse each format separately, normalize to (time, source, event), then merge and sort.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="5">
+              <input type="checkbox" id="t5">
+              <div class="task-body">
+                <div class="task-title">6 · Reconstruct the attack · Phase 2: Correlation (25 min)</div>
+                <div class="task-desc">From the merged timeline, write the sequence of events: when did scanning start, when did it escalate, when did the attacker get in, what did they do inside. Note anything that looks like recon (404s on sensitive paths) and the User-Agent that betrays tooling.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="6">
+              <input type="checkbox" id="t6">
+              <div class="task-body">
+                <div class="task-title">7 · Write your first detection · Phase 3: Detection engineering (35 min)</div>
+                <div class="task-desc">Create <code>detections.yaml</code> with one rule for each of these conditions, in this format: Write three rules: the brute-force-then-success above, a rule for the web recon pattern (multiple 404s on sensitive paths from one IP), and a rule for the tooling User-Agent (<code>python-requests</code> hitting admin paths).</div>
+<div class="cmd-block">
+                  <pre>- id: BRUTE-FORCE-SSH-001
+     title: SSH brute force followed by success from same source
+     scope: auth.log / office-server
+     condition: &gt;-
+       count of "Failed password" events per source IP within 10 minutes &gt;= 20
+       AND an "Accepted password" from the same IP within 15 minutes after
+     rationale: Password spraying/brute force that succeeded is a compromise, not noise.
+     false_positives: Legit users mistyping, password managers — distinguish by count and
+       success correlation; a single typo never looks like 400 failures.
+     severity: high</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="7">
+              <input type="checkbox" id="t7">
+              <div class="task-body">
+                <div class="task-title">8 · Make one rule executable · Phase 3: Detection engineering (35 min)</div>
+                <div class="task-desc">Write <code>detect.py</code> that takes a log file and prints an alert when a condition fires, in the format <code>[ALERT] &lt;rule id&gt; &lt;time&gt; &lt;summary&gt;</code>. Run it against the synthetic logs and capture the output.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="8">
+              <input type="checkbox" id="t8">
+              <div class="task-body">
+                <div class="task-title">9 · Backtest · Phase 3: Detection engineering (35 min)</div>
+                <div class="task-desc">Run your detection against the FIRST 20 minutes of logs (before the attack). It should print nothing. If it fires, your rule has false positives — tighten the threshold and say why in a comment. A rule that cannot stay quiet on clean data is not a rule.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="9">
+              <input type="checkbox" id="t9">
+              <div class="task-body">
+                <div class="task-title">10 · Write the incident report · Phase 4: Response (10 min)</div>
+                <div class="task-desc">from the template below. End with a concrete containment action: what would you actually DO right now, in order?</div>
+
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn" id="expandAll">Expand all hints</button>
+            <button class="btn danger" id="resetTasks">Reset lab progress</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deliverables">
+        <div class="card">
+          <h2><span class="num">04</span> Deliverables</h2>
+          <p class="dim">Everything lands in ~/cybersec-labs/lab004/.</p>
+          <div class="deliverable">
+            <input type="checkbox" id="d0">
+            <span class="fname">parse_auth.py</span>
+            <span class="fdesc">your structured parser for auth.log</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d1">
+            <span class="fname">merged_timeline.csv</span>
+            <span class="fdesc">both log sources merged, sorted by time (columns: time, source, event)</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d2">
+            <span class="fname">detections.yaml</span>
+            <span class="fdesc">three detection rules in the format above</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d3">
+            
+            <span class="fdesc">`detect.py` + `alerts.txt` — the executable rule and its output on the full logs</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d4">
+            <span class="fname">incident_report.md</span>
+            <span class="fdesc">full report (template below)</span>
+          </div>
+          <textarea data-note="deliverable-notes" placeholder="Track your progress / where each file lives..."></textarea>
+        </div>
+      </section>
+
+      <section id="validation">
+        <div class="card">
+          <h2><span class="num">05</span> Self-Check</h2>
+          <p class="dim" style="margin-bottom:10px">Check yourself honestly — if the answer is no, fix your method before moving on.</p>
+          <div class="check-row">
+            <input type="checkbox" id="v0">
+            <span>Your brute-force count and window show arithmetic (first timestamp, last timestamp,</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v1">
+            <span>The successful login from the attacker IP is in your timeline with its exact timestamp</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v2">
+            <span>Your merged timeline contains events from BOTH sources, sorted by time, with no</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v3">
+            <span>`detect.py` prints at least one alert on the full logs and zero alerts on the first</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v4">
+            <span>Your report separates fact from inference, and the "What I could not determine"</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="assessment">
+        <div class="card">
+          <h2><span class="num">06</span> Assessment</h2>
+          <p class="dim" style="margin-bottom:14px">Answer in writing. Draft here, then copy into your report.</p>
+          <div class="qa">
+            <div class="q"><span class="qn">Q1</span>The attacker used 220 invalid-user failures and 180 root failures before succeeding. Why do attackers bother with "invalid user admin" at all, when "root" is guaranteed to exist? What does the mix of both tell you?</div>
+            <textarea data-note="a1" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q2</span>Your brute-force rule thresholds at 20 failures in 10 minutes. A legit employee with a password manager on a flaky VPN could generate failures. What extra condition in the rule kills that false positive without weakening the real detection?</div>
+            <textarea data-note="a2" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q3</span>You have the attacker IP. Why is blocking the IP the weakest containment action, and what should come first?</div>
+            <textarea data-note="a3" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q4</span>The web log User-Agent is `python-requests/2.31`. Why is that a strong indicator here and a weak indicator in general? What else would you check before calling it the attacker?</div>
+            <textarea data-note="a4" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q5</span>If you had a real SIEM (Splunk, Elastic, Wazuh), how would this lab change? What would you gain, and what would you lose versus a 90-line Python script?</div>
+            <textarea data-note="a5" placeholder="Your answer..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="notes">
+        <div class="card">
+          <h2><span class="num">07</span> Lab Notes</h2>
+          <p class="dim" style="margin-bottom:10px">Anything worth remembering — surprises, dead ends, commands you'll reuse. Saved locally in your browser.</p>
+          <textarea data-note="free-notes" style="min-height:180px" placeholder="What surprised you? What would you do differently? Which command saved you time?"></textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>cyber-labs · lab004 · interactive edition — progress auto-saved locally</footer>
+</div>
+
+<div class="toast" id="toast">Saved ✓</div>
+
+<script>
+(function () {
+  const KEY = 'cyberlab004';
+
+  let state = {
+    tasks: [false,false,false,false,false,false,false,false,false,false],
+    deliverables: [false,false,false,false,false],
+    checks: [false,false,false,false,false],
+    notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved) state = Object.assign(state, saved, {
+      notes: Object.assign(state.notes, saved.notes || {})
+    });
+  } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  let toastTimer;
+  const toast = document.getElementById('toast');
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+  }
+
+  const taskRows = document.querySelectorAll('.task input[type=checkbox]');
+  taskRows.forEach((cb, i) => {
+    cb.checked = !!state.tasks[i];
+    const row = cb.closest('.task');
+    if (cb.checked) row.classList.add('done');
+    cb.addEventListener('change', () => {
+      state.tasks[i] = cb.checked;
+      row.classList.toggle('done', cb.checked);
+      save(); renderProgress();
+    });
+  });
+
+  function renderProgress() {
+    const done = state.tasks.filter(Boolean).length;
+    const pct = Math.round((done / state.tasks.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = done + ' of ' + state.tasks.length + ' tasks complete';
+    const navCount = document.getElementById('navTaskCount');
+    if (navCount) navCount.textContent = done + '/' + state.tasks.length;
+  }
+
+  const dBoxes = ['d0', 'd1', 'd2', 'd3', 'd4'].map(id => document.getElementById(id));
+  dBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.deliverables[i];
+    cb.addEventListener('change', () => { state.deliverables[i] = cb.checked; save(); });
+  });
+  const vBoxes = ['v0', 'v1', 'v2', 'v3', 'v4'].map(id => document.getElementById(id));
+  vBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.checks[i];
+    cb.addEventListener('change', () => { state.checks[i] = cb.checked; save(); });
+  });
+
+  document.querySelectorAll('textarea[data-note]').forEach(ta => {
+    const k = ta.getAttribute('data-note');
+    ta.value = state.notes[k] || '';
+    let deb;
+    ta.addEventListener('input', () => {
+      clearTimeout(deb);
+      deb = setTimeout(() => { state.notes[k] = ta.value; save(); }, 400);
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      const text = pre.innerText.replace(/^copy$/, '').trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1400);
+      });
+    });
+  });
+
+  document.getElementById('resetTasks').addEventListener('click', () => {
+    if (!confirm('Reset all task ticks, checklists and notes for this lab?')) return;
+    state = {
+      tasks: [false,false,false,false,false,false,false,false,false,false],
+      deliverables: [false,false,false,false,false],
+      checks: [false,false,false,false,false],
+      notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+    };
+    taskRows.forEach(cb => { cb.checked = false; cb.closest('.task').classList.remove('done'); });
+    dBoxes.forEach(cb => cb && (cb.checked = false));
+    vBoxes.forEach(cb => cb && (cb.checked = false));
+    document.querySelectorAll('textarea[data-note]').forEach(ta => ta.value = '');
+    save(); renderProgress();
+    showToast('Progress reset');
+  });
+
+  document.getElementById('expandAll').addEventListener('click', () => {
+    const ds = document.querySelectorAll('details');
+    const anyOpen = [...ds].some(d => d.open);
+    ds.forEach(d => d.open = !anyOpen);
+  });
+
+  const links = document.querySelectorAll('nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  window.addEventListener('scroll', () => {
+    let idx = 0;
+    sections.forEach((s, i) => {
+      if (s && s.getBoundingClientRect().top < 120) idx = i;
+    });
+    links.forEach((l, i) => l.classList.toggle('active', i === idx));
+  }, { passive: true });
+
+  renderProgress();
+})();
+</script>
+</body>
+</html>
