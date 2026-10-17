@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber-Labs · Lab 003 — The Chain: Network Capture → Malware Behaviour → Attribution Report (Interactive)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2a3342;
+    --text: #d7dee8;
+    --dim: #8b98a9;
+    --accent: #4ea1ff;
+    --accent2: #57d9a3;
+    --gold: #f0c000;
+    --red: #ff6b6b;
+    --mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #16202e 0%, #10151f 100%);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px; margin-bottom: 20px; position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 20%, rgba(78,161,255,.12), transparent 55%);
+    pointer-events: none;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; position: relative; }
+  .badge {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(78,161,255,.12); color: var(--accent);
+    border: 1px solid rgba(78,161,255,.3);
+  }
+  .badge.green { background: rgba(87,217,163,.1); color: var(--accent2); border-color: rgba(87,217,163,.3); }
+  .badge.gold { background: rgba(240,192,0,.1); color: var(--gold); border-color: rgba(240,192,0,.3); }
+  h1 { font-size: 28px; font-weight: 700; position: relative; letter-spacing: -.01em; }
+  h1 .lab-no { color: var(--accent); font-family: var(--mono); }
+  .subtitle { color: var(--dim); margin-top: 6px; font-size: 15px; position: relative; }
+  .progress-shell { margin-top: 20px; position: relative; }
+  .progress-track { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .4s ease; }
+  .progress-label { font-size: 12.5px; color: var(--dim); margin-top: 8px; font-family: var(--mono); }
+
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  nav {
+    position: sticky; top: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  }
+  nav a {
+    display: block; padding: 8px 12px; border-radius: 8px;
+    color: var(--dim); text-decoration: none; font-size: 13.5px; transition: all .15s;
+  }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav a.active { background: rgba(78,161,255,.12); color: var(--accent); font-weight: 600; }
+  nav .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); padding: 6px 12px 8px; font-weight: 700; }
+
+  section { margin-bottom: 24px; scroll-margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  h2 .num {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(78,161,255,.1); border: 1px solid rgba(78,161,255,.25);
+    width: 28px; height: 28px; border-radius: 8px; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  h3 { font-size: 15px; font-weight: 650; margin: 16px 0 8px; color: var(--text); }
+  p { margin-bottom: 10px; color: #c3ccd8; font-size: 14.5px; }
+  p.dim, .dim { color: var(--dim); font-size: 13.5px; }
+  ul { margin: 8px 0 12px 20px; }
+  li { margin-bottom: 6px; font-size: 14px; color: #c3ccd8; }
+  strong { color: var(--text); }
+  code { font-family: var(--mono); font-size: 12.5px; background: rgba(78,161,255,.08); padding: 1px 5px; border-radius: 4px; color: #9ecbff; }
+
+  .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 12px 0; }
+  .concept { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .concept .c-title { font-weight: 650; font-size: 13.5px; color: var(--accent2); margin-bottom: 4px; }
+  .concept .c-body { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+
+  .task {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px; transition: border-color .2s;
+  }
+  .task:hover { border-color: rgba(78,161,255,.35); }
+  .task.done { opacity: .62; }
+  .task.done .task-title { text-decoration: line-through; }
+  .task input[type=checkbox] {
+    appearance: none; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 6px; cursor: pointer; position: relative; transition: all .15s;
+  }
+  .task input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .task input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-weight: 650; font-size: 14.5px; margin-bottom: 3px; }
+  .task-desc { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .cmd-block { position: relative; margin-top: 6px; }
+  pre {
+    background: #0a0e14; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 44px 10px 12px; overflow-x: auto; color: #9ecbff; line-height: 1.55;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  pre .comment { color: #5a6a80; }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--dim);
+    font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    font-family: var(--mono); transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+  textarea {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+    resize: vertical; min-height: 90px; outline: none; transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .field-label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin: 10px 0 6px; }
+
+  .qa { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .qa .q { font-weight: 650; font-size: 14px; margin-bottom: 8px; color: var(--text); }
+  .qa .q .qn { color: var(--gold); font-family: var(--mono); margin-right: 8px; }
+  .qa textarea { min-height: 70px; }
+
+  .deliverable {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 14px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px; font-size: 13.5px;
+  }
+  .deliverable .fname { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .deliverable .fdesc { color: var(--dim); font-size: 12.5px; margin-left: auto; text-align: right; }
+
+  .check-row {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13.5px; color: #c3ccd8;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row input[type=checkbox] {
+    appearance: none; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 5px; cursor: pointer; position: relative;
+  }
+  .check-row input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .check-row input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+
+  .rules {
+    background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;
+  }
+  .rules .r-title { color: var(--red); font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .rules ul { margin: 4px 0 0 18px; }
+  .rules li { font-size: 13px; color: #d8b0b0; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: all .15s; font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 4px 0; user-select: none; }
+  summary:hover { text-decoration: underline; }
+  details .detail-body { padding: 10px 0 4px; font-size: 13px; color: var(--dim); }
+
+  footer { text-align: center; color: #5f6c80; font-size: 12px; margin-top: 40px; font-family: var(--mono); }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel); border: 1px solid var(--accent2); color: var(--accent2);
+    padding: 10px 22px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; transition: all .3s ease; pointer-events: none; z-index: 50;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge-row">
+      <span class="badge">LAB 003</span>
+      <span class="badge gold">Beginner+ (Level 3)</span>
+      <span class="badge green">90 minutes</span>
+      <span class="badge">Digital forensics &amp; threat analysis · malware analysis (static + behavioural) · packet analysis</span>
+    </div>
+    <h1><span class="lab-no">//</span> The Chain: Network Capture → Malware Behaviour → Attribution Report</h1>
+    <div class="subtitle">A network sensor on your org's DMZ logged unusual outbound traffic from a workstation at 03:14 UTC. The IDS flagged it as "possible C2 beacon." The sensor captured 30 seconds of packets before the con...</div>
+    <div class="progress-shell">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 of 14 tasks complete</div>
+    </div>
+  </header>
+
+  <div class="rules">
+    <div class="r-title">⚠ RULES OF ENGAGEMENT — NON-NEGOTIABLE</div>
+    <ul>
+      <li>Everything runs on a machine you own or have written authorisation to test.</li>
+      <li>The payload executes only in an isolated VM with no network bridge to your</li>
+      <li>Do not send the payload to anyone. Do not upload it to any scanning service</li>
+      <li>If the IOCs match a real, active campaign, report through the proper channel</li>
+    </ul>
+  </div>
+
+  <div class="grid">
+    <nav id="sideNav">
+      <div class="nav-title">Navigate</div>
+      <a href="#brief" class="active">Briefing</a>
+      <a href="#concepts">Concepts</a>
+      <a href="#tasks">Tasks <span id="navTaskCount" style="float:right;font-family:var(--mono);font-size:11px">0/14</span></a>
+      <a href="#deliverables">Deliverables</a>
+      <a href="#validation">Self-Check</a>
+      <a href="#assessment">Assessment</a>
+      <a href="#notes">Lab Notes</a>
+    </nav>
+
+    <div>
+      <section id="brief">
+        <div class="card">
+          <h2><span class="num">01</span> Briefing</h2>
+          <p>Run a full triage chain the way a real SOC does it: start from a suspicious network capture, extract the payload, determine what it does, and write a report that attributes the activity. You will learn that packet analysis, malware analysis, and report writing are not three separate skills — they are one workflow with three tools.</p>
+          <p>A network sensor on your org's DMZ logged unusual outbound traffic from a workstation at 03:14 UTC. The IDS flagged it as "possible C2 beacon." The sensor captured 30 seconds of packets before the connection dropped. You have: - <code>suspicious_capture.pcap</code> — the network capture (provided) - <code>payload.bin</code> — a single file extracted from the capture (provided) - A note: "Host was reported acting strangely three days ago." No live host to examine. No SIEM logs. Just the pcap and the payload. Your job is to determine: what is this, how does it work, and is it still a threat?</p>
+          <h3>Environment</h3>
+          <ul>
+          <li>```bash</li>
+          <li>mkdir -p ~/cybersec-labs/lab003 && cd ~/cybersec-labs/lab003</li>
+          <li>```</li>
+          <li>Tools: <code>tshark</code> (or <code>Wireshark</code>), <code>xxd</code>, <code>strings</code>, <code>file</code>, <code>binwalk</code>, <code>python3</code>.</li>
+          <li>All standard. Use your isolated VM for anything that executes the payload.</li>
+          <li><strong>Download the sample files:</strong></li>
+          <li>```bash</li>
+          <li>```</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="concepts">
+        <div class="card">
+          <h2><span class="num">02</span> Concept Primer</h2>
+          <p class="dim">Read before starting — these ideas frame every task below.</p>
+          <div class="concepts">
+            <div class="concept">
+              <div class="c-title">Beaconing pattern</div>
+              <div class="c-body">C2 malware does not blast data continuously. It connects on a timer — every 30 seconds, every 5 minutes, jittered to avoid detection. In a pcap, this looks like repeated small packets to the same destination with regular intervals. Regular intervals = automated. Human traffic is irregular.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Payload extraction</div>
+              <div class="c-body">A pcap is not a file archive. Extracting the payload means following TCP streams and carving out the data bytes. `tshark` can do this with `--export-objects`. The result may be a script, a binary, or encoded data.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Static analysis before execution</div>
+              <div class="c-body">Never run unknown code before you have read it. `file` tells you the format. `strings` pulls readable text. `xxd` gives you the raw bytes. Nine times out of ten, you learn enough to classify the threat without executing it.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Behavioural analysis</div>
+              <div class="c-body">If static analysis is inconclusive, run the payload in a sandbox (VM with no network, or a container with `--network none`) and observe: what files does it touch? What does it try to open? Does it fork? Does it try to phone home?</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">IOCs (Indicators of Compromise)</div>
+              <div class="c-body">The specific, observable artefacts that identify this threat: IP addresses, domain names, file hashes, file paths, registry keys, mutex names. IOCs are what you feed into your detection rules. An IOC without a hash is incomplete.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <div class="card">
+          <h2><span class="num">03</span> Tasks <span class="dim" style="font-weight:400;font-size:13px">— do these in order</span></h2>
+          <p class="dim" style="margin-bottom:14px">Write down every command you run and its key output — your deliverable depends on the evidence, not on the answers. Click a command block to copy it.</p>
+          <div id="taskList">
+            <div class="task" data-task="0">
+              <input type="checkbox" id="t0">
+              <div class="task-body">
+                <div class="task-title">1 · Open the pcap with `tshark -r suspicious_capture.pcap`. Identify: · Phase 1: Network analysis (25 min)</div>
+                <div class="task-desc">- Source and destination IPs - Destination port(s) and protocol - Timestamps of each connection attempt - Interval between connection attempts (calculate it precisely)</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="1">
+              <input type="checkbox" id="t1">
+              <div class="task-body">
+                <div class="task-title">2 · Follow the TCP stream(s). Is there readable data in the payload? What encoding? · Phase 1: Network analysis (25 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="2">
+              <input type="checkbox" id="t2">
+              <div class="task-body">
+                <div class="task-title">3 · Question to answer before proceeding: · Phase 1: Network analysis (25 min)</div>
+                <div class="task-desc">Does the timing pattern match automated beaconing or human activity? What is your evidence?</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="3">
+              <input type="checkbox" id="t3">
+              <div class="task-body">
+                <div class="task-title">4 · Export the HTTP objects or carve the TCP stream data into a file. · Phase 2: Payload extraction (15 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="4">
+              <input type="checkbox" id="t4">
+              <div class="task-body">
+                <div class="task-title">5 · Run `file` on the result. What format is it? · Phase 2: Payload extraction (15 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="5">
+              <input type="checkbox" id="t5">
+              <div class="task-body">
+                <div class="task-title">6 · Run `strings` (minimum length 6). What readable text appears? · Phase 2: Payload extraction (15 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="6">
+              <input type="checkbox" id="t6">
+              <div class="task-body">
+                <div class="task-title">7 · Run `xxd | head -50` on the first bytes. What do you see? · Phase 2: Payload extraction (15 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="7">
+              <input type="checkbox" id="t7">
+              <div class="task-body">
+                <div class="task-title">8 · Based on the `file` output, classify the payload: · Phase 3: Static analysis (20 min)</div>
+                <div class="task-desc">- Script (shell, Python, JavaScript)? - Binary (ELF, PE, Mach-O)? - Data (encoded, compressed, encrypted)?</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="8">
+              <input type="checkbox" id="t8">
+              <div class="task-body">
+                <div class="task-title">9 · If it is a script: read the entire thing. What does it do? List every · Phase 3: Static analysis (20 min)</div>
+                <div class="task-desc">external connection, file operation, and system command it contains.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="9">
+              <input type="checkbox" id="t9">
+              <div class="task-body">
+                <div class="task-title">10 · If it is a binary: identify the architecture and any embedded strings that · Phase 3: Static analysis (20 min)</div>
+                <div class="task-desc">reveal its purpose (URLs, IPs, file paths, error messages).</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="10">
+              <input type="checkbox" id="t10">
+              <div class="task-body">
+                <div class="task-title">11 · Compute the SHA256 hash of the payload. This is your primary IOC. · Phase 3: Static analysis (20 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+            <div class="task" data-task="11">
+              <input type="checkbox" id="t11">
+              <div class="task-body">
+                <div class="task-title">12 · Only if static analysis was inconclusive · Phase 4: Behavioural analysis (20 min)</div>
+                <div class="task-desc">— in your isolated VM: - Start a packet capture on the VM's loopback and any virtual interface. - Execute the payload. - Observe: does it make network connections? To where? What does it send? - Check what files it creates or modifies. - Check if it spawns child processes.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="12">
+              <input type="checkbox" id="t12">
+              <div class="task-body">
+                <div class="task-title">13 · Do NOT execute the payload on your host machine · Phase 4: Behavioural analysis (20 min)</div>
+                <div class="task-desc">If you cannot set up an isolated environment, mark this phase as skipped and note why. A skipped phase with an explanation is a valid deliverable. Executing malware on your daily driver is not.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="13">
+              <input type="checkbox" id="t13">
+              <div class="task-body">
+                <div class="task-title">14 · Write `triage_report.md` with the sections below. · Phase 5: Report (10 min)</div>
+                <div class="task-desc"></div>
+
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn" id="expandAll">Expand all hints</button>
+            <button class="btn danger" id="resetTasks">Reset lab progress</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deliverables">
+        <div class="card">
+          <h2><span class="num">04</span> Deliverables</h2>
+          <p class="dim">Everything lands in ~/cybersec-labs/lab003/.</p>
+          <div class="deliverable">
+            <input type="checkbox" id="d0">
+            <span class="fname">extracted_payload.bin</span>
+            <span class="fdesc">the carved payload file</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d1">
+            <span class="fname">payload_sha256.txt</span>
+            <span class="fdesc">the hash</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d2">
+            <span class="fname">ioc_list.md</span>
+            <span class="fdesc">every IOC you identified (type, value, context)</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d3">
+            <span class="fname">triage_report.md</span>
+            <span class="fdesc">the full report (template below)</span>
+          </div>
+          <textarea data-note="deliverable-notes" placeholder="Track your progress / where each file lives..."></textarea>
+        </div>
+      </section>
+
+      <section id="validation">
+        <div class="card">
+          <h2><span class="num">05</span> Self-Check</h2>
+          <p class="dim" style="margin-bottom:10px">Check yourself honestly — if the answer is no, fix your method before moving on.</p>
+          <div class="check-row">
+            <input type="checkbox" id="v0">
+            <span>Your beacon interval calculation shows your work (timestamp of first packet,</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v1">
+            <span>Your IOC list includes the SHA256 hash. A threat report without a hash is</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v2">
+            <span>Your report has a "What I could not determine" section with real content.</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v3">
+            <span>If you executed the payload, you can show the VM was isolated (no host</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="assessment">
+        <div class="card">
+          <h2><span class="num">06</span> Assessment</h2>
+          <p class="dim" style="margin-bottom:14px">Answer in writing. Draft here, then copy into your report.</p>
+          <div class="qa">
+            <div class="q"><span class="qn">Q1</span>Why is a SHA256 hash a better long-term IOC than an IP address?</div>
+            <textarea data-note="a1" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q2</span>The pcap shows a connection to `185.220.101.42:443`. The payload is a Python script that does `requests.get("http://185.220.101.42/gate.php")`. Are these the same threat actor? What is your evidence, and what is missing?</div>
+            <textarea data-note="a2" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q3</span>You find a cron entry (from Lab 002) that runs a script matching the SHA256 from this lab. What is your next action, in order?</div>
+            <textarea data-note="a3" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q4</span>Why does "interval is regular" alone not prove beaconing? What else would you check?</div>
+            <textarea data-note="a4" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q5</span>The payload is base64-encoded. After decoding, it is a shell script that downloads and executes a second-stage binary. What does the pcap tell you about the second stage, and what can you not tell?</div>
+            <textarea data-note="a5" placeholder="Your answer..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="notes">
+        <div class="card">
+          <h2><span class="num">07</span> Lab Notes</h2>
+          <p class="dim" style="margin-bottom:10px">Anything worth remembering — surprises, dead ends, commands you'll reuse. Saved locally in your browser.</p>
+          <textarea data-note="free-notes" style="min-height:180px" placeholder="What surprised you? What would you do differently? Which command saved you time?"></textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>cyber-labs · lab003 · interactive edition — progress auto-saved locally</footer>
+</div>
+
+<div class="toast" id="toast">Saved ✓</div>
+
+<script>
+(function () {
+  const KEY = 'cyberlab003';
+
+  let state = {
+    tasks: [false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+    deliverables: [false,false,false,false],
+    checks: [false,false,false,false],
+    notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved) state = Object.assign(state, saved, {
+      notes: Object.assign(state.notes, saved.notes || {})
+    });
+  } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  let toastTimer;
+  const toast = document.getElementById('toast');
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+  }
+
+  const taskRows = document.querySelectorAll('.task input[type=checkbox]');
+  taskRows.forEach((cb, i) => {
+    cb.checked = !!state.tasks[i];
+    const row = cb.closest('.task');
+    if (cb.checked) row.classList.add('done');
+    cb.addEventListener('change', () => {
+      state.tasks[i] = cb.checked;
+      row.classList.toggle('done', cb.checked);
+      save(); renderProgress();
+    });
+  });
+
+  function renderProgress() {
+    const done = state.tasks.filter(Boolean).length;
+    const pct = Math.round((done / state.tasks.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = done + ' of ' + state.tasks.length + ' tasks complete';
+    const navCount = document.getElementById('navTaskCount');
+    if (navCount) navCount.textContent = done + '/' + state.tasks.length;
+  }
+
+  const dBoxes = ['d0', 'd1', 'd2', 'd3'].map(id => document.getElementById(id));
+  dBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.deliverables[i];
+    cb.addEventListener('change', () => { state.deliverables[i] = cb.checked; save(); });
+  });
+  const vBoxes = ['v0', 'v1', 'v2', 'v3'].map(id => document.getElementById(id));
+  vBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.checks[i];
+    cb.addEventListener('change', () => { state.checks[i] = cb.checked; save(); });
+  });
+
+  document.querySelectorAll('textarea[data-note]').forEach(ta => {
+    const k = ta.getAttribute('data-note');
+    ta.value = state.notes[k] || '';
+    let deb;
+    ta.addEventListener('input', () => {
+      clearTimeout(deb);
+      deb = setTimeout(() => { state.notes[k] = ta.value; save(); }, 400);
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      const text = pre.innerText.replace(/^copy$/, '').trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1400);
+      });
+    });
+  });
+
+  document.getElementById('resetTasks').addEventListener('click', () => {
+    if (!confirm('Reset all task ticks, checklists and notes for this lab?')) return;
+    state = {
+      tasks: [false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+      deliverables: [false,false,false,false],
+      checks: [false,false,false,false],
+      notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+    };
+    taskRows.forEach(cb => { cb.checked = false; cb.closest('.task').classList.remove('done'); });
+    dBoxes.forEach(cb => cb && (cb.checked = false));
+    vBoxes.forEach(cb => cb && (cb.checked = false));
+    document.querySelectorAll('textarea[data-note]').forEach(ta => ta.value = '');
+    save(); renderProgress();
+    showToast('Progress reset');
+  });
+
+  document.getElementById('expandAll').addEventListener('click', () => {
+    const ds = document.querySelectorAll('details');
+    const anyOpen = [...ds].some(d => d.open);
+    ds.forEach(d => d.open = !anyOpen);
+  });
+
+  const links = document.querySelectorAll('nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  window.addEventListener('scroll', () => {
+    let idx = 0;
+    sections.forEach((s, i) => {
+      if (s && s.getBoundingClientRect().top < 120) idx = i;
+    });
+    links.forEach((l, i) => l.classList.toggle('active', i === idx));
+  }, { passive: true });
+
+  renderProgress();
+})();
+</script>
+</body>
+</html>

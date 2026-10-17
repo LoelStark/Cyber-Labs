@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber-Labs · Lab 002 — The Privilege Surface: SUID, sudo, cron, and Persistence (Interactive)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2a3342;
+    --text: #d7dee8;
+    --dim: #8b98a9;
+    --accent: #4ea1ff;
+    --accent2: #57d9a3;
+    --gold: #f0c000;
+    --red: #ff6b6b;
+    --mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #16202e 0%, #10151f 100%);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px; margin-bottom: 20px; position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 20%, rgba(78,161,255,.12), transparent 55%);
+    pointer-events: none;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; position: relative; }
+  .badge {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(78,161,255,.12); color: var(--accent);
+    border: 1px solid rgba(78,161,255,.3);
+  }
+  .badge.green { background: rgba(87,217,163,.1); color: var(--accent2); border-color: rgba(87,217,163,.3); }
+  .badge.gold { background: rgba(240,192,0,.1); color: var(--gold); border-color: rgba(240,192,0,.3); }
+  h1 { font-size: 28px; font-weight: 700; position: relative; letter-spacing: -.01em; }
+  h1 .lab-no { color: var(--accent); font-family: var(--mono); }
+  .subtitle { color: var(--dim); margin-top: 6px; font-size: 15px; position: relative; }
+  .progress-shell { margin-top: 20px; position: relative; }
+  .progress-track { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .4s ease; }
+  .progress-label { font-size: 12.5px; color: var(--dim); margin-top: 8px; font-family: var(--mono); }
+
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  nav {
+    position: sticky; top: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  }
+  nav a {
+    display: block; padding: 8px 12px; border-radius: 8px;
+    color: var(--dim); text-decoration: none; font-size: 13.5px; transition: all .15s;
+  }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav a.active { background: rgba(78,161,255,.12); color: var(--accent); font-weight: 600; }
+  nav .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); padding: 6px 12px 8px; font-weight: 700; }
+
+  section { margin-bottom: 24px; scroll-margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  h2 .num {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(78,161,255,.1); border: 1px solid rgba(78,161,255,.25);
+    width: 28px; height: 28px; border-radius: 8px; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  h3 { font-size: 15px; font-weight: 650; margin: 16px 0 8px; color: var(--text); }
+  p { margin-bottom: 10px; color: #c3ccd8; font-size: 14.5px; }
+  p.dim, .dim { color: var(--dim); font-size: 13.5px; }
+  ul { margin: 8px 0 12px 20px; }
+  li { margin-bottom: 6px; font-size: 14px; color: #c3ccd8; }
+  strong { color: var(--text); }
+  code { font-family: var(--mono); font-size: 12.5px; background: rgba(78,161,255,.08); padding: 1px 5px; border-radius: 4px; color: #9ecbff; }
+
+  .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 12px 0; }
+  .concept { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .concept .c-title { font-weight: 650; font-size: 13.5px; color: var(--accent2); margin-bottom: 4px; }
+  .concept .c-body { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+
+  .task {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px; transition: border-color .2s;
+  }
+  .task:hover { border-color: rgba(78,161,255,.35); }
+  .task.done { opacity: .62; }
+  .task.done .task-title { text-decoration: line-through; }
+  .task input[type=checkbox] {
+    appearance: none; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 6px; cursor: pointer; position: relative; transition: all .15s;
+  }
+  .task input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .task input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-weight: 650; font-size: 14.5px; margin-bottom: 3px; }
+  .task-desc { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .cmd-block { position: relative; margin-top: 6px; }
+  pre {
+    background: #0a0e14; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 44px 10px 12px; overflow-x: auto; color: #9ecbff; line-height: 1.55;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  pre .comment { color: #5a6a80; }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--dim);
+    font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    font-family: var(--mono); transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+  textarea {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+    resize: vertical; min-height: 90px; outline: none; transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .field-label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin: 10px 0 6px; }
+
+  .qa { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .qa .q { font-weight: 650; font-size: 14px; margin-bottom: 8px; color: var(--text); }
+  .qa .q .qn { color: var(--gold); font-family: var(--mono); margin-right: 8px; }
+  .qa textarea { min-height: 70px; }
+
+  .deliverable {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 14px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px; font-size: 13.5px;
+  }
+  .deliverable .fname { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .deliverable .fdesc { color: var(--dim); font-size: 12.5px; margin-left: auto; text-align: right; }
+
+  .check-row {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13.5px; color: #c3ccd8;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row input[type=checkbox] {
+    appearance: none; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 5px; cursor: pointer; position: relative;
+  }
+  .check-row input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .check-row input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+
+  .rules {
+    background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;
+  }
+  .rules .r-title { color: var(--red); font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .rules ul { margin: 4px 0 0 18px; }
+  .rules li { font-size: 13px; color: #d8b0b0; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: all .15s; font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 4px 0; user-select: none; }
+  summary:hover { text-decoration: underline; }
+  details .detail-body { padding: 10px 0 4px; font-size: 13px; color: var(--dim); }
+
+  footer { text-align: center; color: #5f6c80; font-size: 12px; margin-top: 40px; font-family: var(--mono); }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel); border: 1px solid var(--accent2); color: var(--accent2);
+    padding: 10px 22px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; transition: all .3s ease; pointer-events: none; z-index: 50;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge-row">
+      <span class="badge">LAB 002</span>
+      <span class="badge gold">Beginner (Level 2)</span>
+      <span class="badge green">60–90 minutes</span>
+      <span class="badge">Linux security &amp; system administration</span>
+    </div>
+    <h1><span class="lab-no">//</span> The Privilege Surface: SUID, sudo, cron, and Persistence</h1>
+    <div class="subtitle">A workstation in your org was reported as "acting strangely." Before anyone runs a scanner, you are asked a blunt question: **if an unprivileged user on this box wanted root, what would they try first...</div>
+    <div class="progress-shell">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 of 6 tasks complete</div>
+    </div>
+  </header>
+
+  <div class="rules">
+    <div class="r-title">⚠ RULES OF ENGAGEMENT — NON-NEGOTIABLE</div>
+    <ul>
+      <li>Everything runs on a machine you own or have written authorisation to test.</li>
+      <li>Do not exploit, escalate, or modify anything on a shared, university, employer, or cloud</li>
+      <li>If a finding on a system that is not yours looks serious, stop and report it through the</li>
+    </ul>
+  </div>
+
+  <div class="grid">
+    <nav id="sideNav">
+      <div class="nav-title">Navigate</div>
+      <a href="#brief" class="active">Briefing</a>
+      <a href="#concepts">Concepts</a>
+      <a href="#tasks">Tasks <span id="navTaskCount" style="float:right;font-family:var(--mono);font-size:11px">0/6</span></a>
+      <a href="#deliverables">Deliverables</a>
+      <a href="#validation">Self-Check</a>
+      <a href="#assessment">Assessment</a>
+      <a href="#notes">Lab Notes</a>
+    </nav>
+
+    <div>
+      <section id="brief">
+        <div class="card">
+          <h2><span class="num">01</span> Briefing</h2>
+          <p>Learn to enumerate the <strong>privilege surface</strong> of a Linux host: every place where the system lets one user become another user, run code on a schedule, or inherit elevated rights. This is the exact checklist a security engineer runs during triage, and the exact checklist an attacker runs before choosing an exploitation path. You are not exploiting anything today — you are building the map and learning to reason about each node on it.</p>
+          <p>A workstation in your org was reported as "acting strangely." Before anyone runs a scanner, you are asked a blunt question: <strong>if an unprivileged user on this box wanted root, what would they try first?</strong> You cannot answer that from memory — you answer it by enumerating the host's own privilege surface and judging each finding. Your output is a triage note that a senior engineer can act on within five minutes.</p>
+          <h3>Environment</h3>
+          <ul>
+          <li>```bash</li>
+          <li>mkdir -p ~/cybersec-labs/lab002 && cd ~/cybersec-labs/lab002</li>
+          <li>```</li>
+          <li>Tools: <code>find</code>, <code>sudo</code>, <code>getent</code>, <code>crontab</code>, <code>systemctl</code>, <code>stat</code>, <code>sha256sum</code>, <code>ls</code>, <code>grep</code>.</li>
+          <li>All standard. Some output is more complete as root — if you have a VM where you are root, use</li>
+          <li>it; if not, run what you can and mark the gaps. <strong>A gaps list is a valid deliverable</strong> — knowing</li>
+          <li>what you could not see is a security skill.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="concepts">
+        <div class="card">
+          <h2><span class="num">02</span> Concept Primer</h2>
+          <p class="dim">Read before starting — these ideas frame every task below.</p>
+          <div class="concepts">
+            <div class="concept">
+              <div class="c-title">SUID bit</div>
+              <div class="c-body">A file with the setuid bit executes with the permissions of its *owner*, not the caller. `/usr/bin/passwd` is SUID root so you can change your own password entry in a root-owned file. Every SUID-root binary is a potential path to root: either it has a known escape (editors, `less`, `find -exec`, anything that can spawn a shell) or it can be abused to read/write files it should not.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">sudoers rules</div>
+              <div class="c-body">`/etc/sudoers` and `/etc/sudoers.d/*` grant named users or groups the right to run commands as other users. `ALL=(ALL) ALL` is total. `(root) NOPASSWD: /usr/bin/vim` is *also* total, because `vim` can run shell commands — this is the classic "sudo is not a sandbox" trap.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Persistence via scheduled execution</div>
+              <div class="c-body">Anything that runs code on a timer (user crontabs, `/etc/cron.d`, systemd timers, `at` jobs, shell rc files, systemd unit drop-ins) is both a defence problem and an attacker's favourite. The question is always: *who can modify the thing that runs, and as whom does it run?*</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">PATH hijacking</div>
+              <div class="c-body">If a script run as root invokes `curl` without an absolute path, and a directory earlier in root's PATH is writable by you, you supply the `curl`.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <div class="card">
+          <h2><span class="num">03</span> Tasks <span class="dim" style="font-weight:400;font-size:13px">— do these in order</span></h2>
+          <p class="dim" style="margin-bottom:14px">Write down every command you run and its key output — your deliverable depends on the evidence, not on the answers. Click a command block to copy it.</p>
+          <div id="taskList">
+            <div class="task" data-task="0">
+              <input type="checkbox" id="t0">
+              <div class="task-body">
+                <div class="task-title">1 · SUID/SGID inventory</div>
+                <div class="task-desc">Enumerate every SUID and SGID file on the system. For each, record path, owner, and whether you can name its legitimate purpose. Produce <code>suid_inventory.txt</code> with a one-line justification per entry, and a total count.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="1">
+              <input type="checkbox" id="t1">
+              <div class="task-body">
+                <div class="task-title">2 · sudo rules</div>
+                <div class="task-desc">List the rules that apply to you (<code>sudo -l</code>) and the contents of <code>/etc/sudoers</code> plus every file in <code>/etc/sudoers.d/</code>. Flag any rule whose command can spawn a shell, read arbitrary files, or write arbitrary files. Explain <em>why</em> in one line each.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="2">
+              <input type="checkbox" id="t2">
+              <div class="task-body">
+                <div class="task-title">3 · Scheduled execution</div>
+                <div class="task-desc">Enumerate: your crontab, <code>/etc/crontab</code>, <code>/etc/cron.{d,hourly,daily,weekly,monthly}</code>, systemd timers (<code>systemctl list-timers --all</code>), and <code>at</code> jobs. For each entry, identify the user it runs as and whether that user or a group you belong to can modify the target script.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="3">
+              <input type="checkbox" id="t3">
+              <div class="task-body">
+                <div class="task-title">4 · PATH and world-writable attack surface</div>
+                <div class="task-desc">Check each directory in root's PATH for group/other write permission. Separately, find files world-writable anywhere under <code>/usr</code>, <code>/etc</code>, and <code>/opt</code>. Count them; list the ten most interesting.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="4">
+              <input type="checkbox" id="t4">
+              <div class="task-body">
+                <div class="task-title">5 · Authentication posture</div>
+                <div class="task-desc">Read <code>/etc/pam.d/</code> (at minimum <code>common-auth</code> or the distro equivalent) and <code>/etc/ssh/sshd_config</code> if present. Record: password policy / lockout configuration, whether root login over SSH is permitted, and whether password auth is on.</div>
+
+              </div>
+            </div>
+            <div class="task" data-task="5">
+              <input type="checkbox" id="t5">
+              <div class="task-body">
+                <div class="task-title">6 · One hypothesis, written properly</div>
+                <div class="task-desc">Pick your single most promising finding from tasks 1–5. Write (a) the escalation or persistence hypothesis in five lines, (b) the exact command you <em>would</em> run to confirm it on a machine you are authorised to test, and (c) the log line or artefact that would reveal it had already happened.</div>
+
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn" id="expandAll">Expand all hints</button>
+            <button class="btn danger" id="resetTasks">Reset lab progress</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deliverables">
+        <div class="card">
+          <h2><span class="num">04</span> Deliverables</h2>
+          <p class="dim">Everything lands in ~/cybersec-labs/lab002/.</p>
+          <div class="deliverable">
+            <input type="checkbox" id="d0">
+            <span class="fname">suid_inventory.txt</span>
+            <span class="fdesc">the SUID/SGID list with justifications and a count.</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d1">
+            <span class="fname">privilege_surface.md</span>
+            <span class="fdesc">your triage note: findings table (finding, evidence command,</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d2">
+            <span class="fname">commands.txt</span>
+            <span class="fdesc">every command you ran, one per line, each with a one-line explanation.</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d3">
+            
+            <span class="fdesc">A capture of one command and its output (terminal screenshot or copied text).</span>
+          </div>
+          <textarea data-note="deliverable-notes" placeholder="Track your progress / where each file lives..."></textarea>
+        </div>
+      </section>
+
+      <section id="validation">
+        <div class="card">
+          <h2><span class="num">05</span> Self-Check</h2>
+          <p class="dim" style="margin-bottom:10px">Check yourself honestly — if the answer is no, fix your method before moving on.</p>
+          <div class="check-row">
+            <input type="checkbox" id="v0">
+            <span>Every SUID binary in your inventory has a justification or is explicitly marked</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v1">
+            <span>Your sudo analysis names the *mechanism* of escape (e.g. "vim → `:!sh`"), not just</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v2">
+            <span>Your cron/systemd findings each state the **user** the job runs as. A finding without the</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v3">
+            <span>Task 6(c) is a concrete, greppable artefact — not "check the logs."</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="assessment">
+        <div class="card">
+          <h2><span class="num">06</span> Assessment</h2>
+          <p class="dim" style="margin-bottom:14px">Answer in writing. Draft here, then copy into your report.</p>
+          <div class="qa">
+            <div class="q"><span class="qn">Q1</span>A SUID binary you cannot explain is more dangerous than one you can. Why is "unknown purpose" itself the finding, rather than a reason to skip it?</div>
+            <textarea data-note="a1" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q2</span>`sudo -l` shows `(root) NOPASSWD: /usr/bin/tar`. Write the escalation in one line and explain why removing the shell escape is not a fix.</div>
+            <textarea data-note="a2" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q3</span>A root cron job runs `/usr/local/bin/backup.sh`, owned by root, mode 755, in a directory owned by root, mode 755. Where is the remaining attack surface, if any? Justify.</div>
+            <textarea data-note="a3" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q4</span>Why does a world-writable file in `/etc` usually matter more than one in `/tmp`?</div>
+            <textarea data-note="a4" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q5</span>You found a cron entry running as root, created three days ago, whose script you cannot find anywhere on disk. Give your next three actions in order.</div>
+            <textarea data-note="a5" placeholder="Your answer..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="notes">
+        <div class="card">
+          <h2><span class="num">07</span> Lab Notes</h2>
+          <p class="dim" style="margin-bottom:10px">Anything worth remembering — surprises, dead ends, commands you'll reuse. Saved locally in your browser.</p>
+          <textarea data-note="free-notes" style="min-height:180px" placeholder="What surprised you? What would you do differently? Which command saved you time?"></textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>cyber-labs · lab002 · interactive edition — progress auto-saved locally</footer>
+</div>
+
+<div class="toast" id="toast">Saved ✓</div>
+
+<script>
+(function () {
+  const KEY = 'cyberlab002';
+
+  let state = {
+    tasks: [false,false,false,false,false,false],
+    deliverables: [false,false,false,false],
+    checks: [false,false,false,false],
+    notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved) state = Object.assign(state, saved, {
+      notes: Object.assign(state.notes, saved.notes || {})
+    });
+  } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  let toastTimer;
+  const toast = document.getElementById('toast');
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+  }
+
+  const taskRows = document.querySelectorAll('.task input[type=checkbox]');
+  taskRows.forEach((cb, i) => {
+    cb.checked = !!state.tasks[i];
+    const row = cb.closest('.task');
+    if (cb.checked) row.classList.add('done');
+    cb.addEventListener('change', () => {
+      state.tasks[i] = cb.checked;
+      row.classList.toggle('done', cb.checked);
+      save(); renderProgress();
+    });
+  });
+
+  function renderProgress() {
+    const done = state.tasks.filter(Boolean).length;
+    const pct = Math.round((done / state.tasks.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = done + ' of ' + state.tasks.length + ' tasks complete';
+    const navCount = document.getElementById('navTaskCount');
+    if (navCount) navCount.textContent = done + '/' + state.tasks.length;
+  }
+
+  const dBoxes = ['d0', 'd1', 'd2', 'd3'].map(id => document.getElementById(id));
+  dBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.deliverables[i];
+    cb.addEventListener('change', () => { state.deliverables[i] = cb.checked; save(); });
+  });
+  const vBoxes = ['v0', 'v1', 'v2', 'v3'].map(id => document.getElementById(id));
+  vBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.checks[i];
+    cb.addEventListener('change', () => { state.checks[i] = cb.checked; save(); });
+  });
+
+  document.querySelectorAll('textarea[data-note]').forEach(ta => {
+    const k = ta.getAttribute('data-note');
+    ta.value = state.notes[k] || '';
+    let deb;
+    ta.addEventListener('input', () => {
+      clearTimeout(deb);
+      deb = setTimeout(() => { state.notes[k] = ta.value; save(); }, 400);
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      const text = pre.innerText.replace(/^copy$/, '').trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1400);
+      });
+    });
+  });
+
+  document.getElementById('resetTasks').addEventListener('click', () => {
+    if (!confirm('Reset all task ticks, checklists and notes for this lab?')) return;
+    state = {
+      tasks: [false,false,false,false,false,false],
+      deliverables: [false,false,false,false],
+      checks: [false,false,false,false],
+      notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+    };
+    taskRows.forEach(cb => { cb.checked = false; cb.closest('.task').classList.remove('done'); });
+    dBoxes.forEach(cb => cb && (cb.checked = false));
+    vBoxes.forEach(cb => cb && (cb.checked = false));
+    document.querySelectorAll('textarea[data-note]').forEach(ta => ta.value = '');
+    save(); renderProgress();
+    showToast('Progress reset');
+  });
+
+  document.getElementById('expandAll').addEventListener('click', () => {
+    const ds = document.querySelectorAll('details');
+    const anyOpen = [...ds].some(d => d.open);
+    ds.forEach(d => d.open = !anyOpen);
+  });
+
+  const links = document.querySelectorAll('nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  window.addEventListener('scroll', () => {
+    let idx = 0;
+    sections.forEach((s, i) => {
+      if (s && s.getBoundingClientRect().top < 120) idx = i;
+    });
+    links.forEach((l, i) => l.classList.toggle('active', i === idx));
+  }, { passive: true });
+
+  renderProgress();
+})();
+</script>
+</body>
+</html>
