@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber-Labs · Lab 007 — Vulnerability Assessment with Nmap (Interactive)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2a3342;
+    --text: #d7dee8;
+    --dim: #8b98a9;
+    --accent: #4ea1ff;
+    --accent2: #57d9a3;
+    --gold: #f0c000;
+    --red: #ff6b6b;
+    --mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6; padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #16202e 0%, #10151f 100%);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px 32px; margin-bottom: 20px; position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 20%, rgba(78,161,255,.12), transparent 55%);
+    pointer-events: none;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; position: relative; }
+  .badge {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(78,161,255,.12); color: var(--accent);
+    border: 1px solid rgba(78,161,255,.3);
+  }
+  .badge.green { background: rgba(87,217,163,.1); color: var(--accent2); border-color: rgba(87,217,163,.3); }
+  .badge.gold { background: rgba(240,192,0,.1); color: var(--gold); border-color: rgba(240,192,0,.3); }
+  h1 { font-size: 28px; font-weight: 700; position: relative; letter-spacing: -.01em; }
+  h1 .lab-no { color: var(--accent); font-family: var(--mono); }
+  .subtitle { color: var(--dim); margin-top: 6px; font-size: 15px; position: relative; }
+  .progress-shell { margin-top: 20px; position: relative; }
+  .progress-track { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .4s ease; }
+  .progress-label { font-size: 12.5px; color: var(--dim); margin-top: 8px; font-family: var(--mono); }
+
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  nav {
+    position: sticky; top: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  }
+  nav a {
+    display: block; padding: 8px 12px; border-radius: 8px;
+    color: var(--dim); text-decoration: none; font-size: 13.5px; transition: all .15s;
+  }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav a.active { background: rgba(78,161,255,.12); color: var(--accent); font-weight: 600; }
+  nav .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); padding: 6px 12px 8px; font-weight: 700; }
+
+  section { margin-bottom: 24px; scroll-margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  h2 .num {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(78,161,255,.1); border: 1px solid rgba(78,161,255,.25);
+    width: 28px; height: 28px; border-radius: 8px; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  h3 { font-size: 15px; font-weight: 650; margin: 16px 0 8px; color: var(--text); }
+  p { margin-bottom: 10px; color: #c3ccd8; font-size: 14.5px; }
+  p.dim, .dim { color: var(--dim); font-size: 13.5px; }
+  ul { margin: 8px 0 12px 20px; }
+  li { margin-bottom: 6px; font-size: 14px; color: #c3ccd8; }
+  strong { color: var(--text); }
+  code { font-family: var(--mono); font-size: 12.5px; background: rgba(78,161,255,.08); padding: 1px 5px; border-radius: 4px; color: #9ecbff; }
+
+  .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 12px 0; }
+  .concept { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .concept .c-title { font-weight: 650; font-size: 13.5px; color: var(--accent2); margin-bottom: 4px; }
+  .concept .c-body { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+
+  .task {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px; transition: border-color .2s;
+  }
+  .task:hover { border-color: rgba(78,161,255,.35); }
+  .task.done { opacity: .62; }
+  .task.done .task-title { text-decoration: line-through; }
+  .task input[type=checkbox] {
+    appearance: none; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 6px; cursor: pointer; position: relative; transition: all .15s;
+  }
+  .task input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .task input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-weight: 650; font-size: 14.5px; margin-bottom: 3px; }
+  .task-desc { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .cmd-block { position: relative; margin-top: 6px; }
+  pre {
+    background: #0a0e14; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 44px 10px 12px; overflow-x: auto; color: #9ecbff; line-height: 1.55;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  pre .comment { color: #5a6a80; }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--dim);
+    font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    font-family: var(--mono); transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+  textarea {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+    resize: vertical; min-height: 90px; outline: none; transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .field-label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; margin: 10px 0 6px; }
+
+  .qa { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .qa .q { font-weight: 650; font-size: 14px; margin-bottom: 8px; color: var(--text); }
+  .qa .q .qn { color: var(--gold); font-family: var(--mono); margin-right: 8px; }
+  .qa textarea { min-height: 70px; }
+
+  .deliverable {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 14px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px; font-size: 13.5px;
+  }
+  .deliverable .fname { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .deliverable .fdesc { color: var(--dim); font-size: 12.5px; margin-left: auto; text-align: right; }
+
+  .check-row {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13.5px; color: #c3ccd8;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .check-row input[type=checkbox] {
+    appearance: none; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--dim); border-radius: 5px; cursor: pointer; position: relative;
+  }
+  .check-row input[type=checkbox]:checked { background: var(--accent2); border-color: var(--accent2); }
+  .check-row input[type=checkbox]:checked::after {
+    content: '✓'; position: absolute; inset: 0; color: #0d1117;
+    font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+
+  .rules {
+    background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;
+  }
+  .rules .r-title { color: var(--red); font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .rules ul { margin: 4px 0 0 18px; }
+  .rules li { font-size: 13px; color: #d8b0b0; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .btn {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: all .15s; font-family: inherit;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 4px 0; user-select: none; }
+  summary:hover { text-decoration: underline; }
+  details .detail-body { padding: 10px 0 4px; font-size: 13px; color: var(--dim); }
+
+  footer { text-align: center; color: #5f6c80; font-size: 12px; margin-top: 40px; font-family: var(--mono); }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel); border: 1px solid var(--accent2); color: var(--accent2);
+    padding: 10px 22px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; transition: all .3s ease; pointer-events: none; z-index: 50;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge-row">
+      <span class="badge">LAB 007</span>
+      <span class="badge gold">Intermediate (Level 7)</span>
+      <span class="badge green">90 minutes</span>
+      <span class="badge">Vulnerability assessment · security automation · network scanning</span>
+    </div>
+    <h1><span class="lab-no">//</span> Vulnerability Assessment with Nmap: Scanning, Analysis, and Reporting</h1>
+    <div class="subtitle">You are a junior security engineer. Your manager asks you to assess the security posture of a newly deployed internal web application before it goes live. The application runs on your local machine at localhost:8080. You have explicit authorisation to scan this target because it is your own system in an isolated environment. Your job: find vulnerabilities, document them clearly, and recommend fixes.</div>
+    <div class="progress-shell">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 of 17 tasks complete</div>
+    </div>
+  </header>
+
+  <div class="rules">
+    <div class="r-title">⚠ RULES OF ENGAGEMENT — NON-NEGOTIABLE</div>
+    <ul>
+      <li>Scan ONLY localhost or systems you own and have explicit authorisation to assess.</li>
+      <li>Do not scan production networks, cloud environments, or any system without written permission.</li>
+      <li>Do not exploit vulnerabilities you find — this is an assessment, not a penetration test.</li>
+      <li>Do not share scan results or vulnerability details publicly.</li>
+      <li>This lab is for learning. Use these skills only in environments where you have explicit authorisation.</li>
+    </ul>
+  </div>
+
+  <div class="grid">
+    <nav id="sideNav">
+      <div class="nav-title">Navigate</div>
+      <a href="#brief" class="active">Briefing</a>
+      <a href="#concepts">Concepts</a>
+      <a href="#tasks">Tasks <span id="navTaskCount" style="float:right;font-family:var(--mono);font-size:11px">0/17</span></a>
+      <a href="#deliverables">Deliverables</a>
+      <a href="#validation">Self-Check</a>
+      <a href="#assessment">Assessment</a>
+      <a href="#notes">Lab Notes</a>
+    </nav>
+
+    <div>
+      <section id="brief">
+        <div class="card">
+          <h2><span class="num">01</span> Briefing</h2>
+          <p>You will learn to perform a systematic vulnerability assessment using Nmap and Python. You will scan a target, enumerate services, detect vulnerabilities with Nmap Scripting Engine (NSE), parse scan results programmatically, and produce a structured vulnerability report. This lab teaches you that vulnerability assessment is not just running a scanner — it is understanding what the scanner tells you, verifying findings, and communicating risk to stakeholders.</p>
+          <p>You are a junior security engineer. Your manager asks you to assess the security posture of a newly deployed internal web application before it goes live. The application runs on your local machine at <code>localhost:8080</code>. You have explicit authorisation to scan this target because it is your own system in an isolated environment. Your job: find vulnerabilities, document them clearly, and recommend fixes.</p>
+          <h3>Environment</h3>
+          <ul>
+          <li><code>sudo apt update && sudo apt install -y nmap python3 python3-pip</code></li>
+          <li><code>nmap --version</code></li>
+          <li><code>python3 --version</code></li>
+          </ul>
+          <h3>Target</h3>
+          <ul>
+          <li>Option A (recommended): Reuse DVWA from Lab 006: <code>docker run --rm -d -p 8080:80 --name dvwa vulnerables/web-dvwa</code></li>
+          <li>Option B: Any local service — check with <code>ss -tlnp</code></li>
+          </ul>
+          <h3>Tools</h3>
+          <ul>
+          <li><code>nmap</code>, <code>python3</code>, optionally <code>xmlstarlet</code> or Python's <code>xml.etree.ElementTree</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="concepts">
+        <div class="card">
+          <h2><span class="num">02</span> Concept Primer</h2>
+          <p class="dim">Read before starting — these ideas frame every task below.</p>
+          <div class="concepts">
+            <div class="concept">
+              <div class="c-title">Nmap</div>
+              <div class="c-body">is a network scanner that discovers hosts and services on a network. It sends packets and analyses responses to determine what is running.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Nmap Scripting Engine (NSE)</div>
+              <div class="c-body">extends Nmap with Lua scripts that perform tasks like vulnerability detection, service enumeration, and brute-force attacks.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Service version detection</div>
+              <div class="c-body">(<code>-sV</code>) probes open ports to determine what software is running and its version. Critical for vulnerability assessment.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">Vulnerability assessment</div>
+              <div class="c-body">is the process of identifying, classifying, and prioritising vulnerabilities. Different from penetration testing — you are finding weaknesses, not exploiting them.</div>
+            </div>
+            <div class="concept">
+              <div class="c-title">False positives</div>
+              <div class="c-body">are common in vulnerability scanning. A scanner says "vulnerable" but the system is actually safe. You must verify findings manually.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <div class="card">
+          <h2><span class="num">03</span> Tasks <span class="dim" style="font-weight:400;font-size:13px">— do these in order</span></h2>
+          <p class="dim" style="margin-bottom:14px">Write down every command you run and its key output — your deliverable depends on the evidence, not on the answers. Click a command block to copy it.</p>
+          <div id="taskList">
+            <div class="task" data-task="0">
+              <input type="checkbox" id="t0">
+              <div class="task-body">
+                <div class="task-title">1 · Identify the target · Phase 1: Host Discovery (10 min)</div>
+                <div class="task-desc">Confirm what is listening on your machine. Note the IP address and open ports. For this lab, <code>127.0.0.1</code> (localhost) is your target.</div>
+                <div class="cmd-block">
+                  <pre>ss -tlnp</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="1">
+              <input type="checkbox" id="t1">
+              <div class="task-body">
+                <div class="task-title">2 · Run a host discovery scan · Phase 1: Host Discovery (10 min)</div>
+                <div class="task-desc">Ping sweep to confirm the host is up. Record the result.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sn 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="2">
+              <input type="checkbox" id="t2">
+              <div class="task-body">
+                <div class="task-title">3 · Run a quick port scan · Phase 1: Host Discovery (10 min)</div>
+                <div class="task-desc">Find open ports. Note which ports are open and what services Nmap thinks they are. This is the "low-hanging fruit" scan.</div>
+                <div class="cmd-block">
+                  <pre>nmap 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="3">
+              <input type="checkbox" id="t3">
+              <div class="task-body">
+                <div class="task-title">4 · Run a service version scan · Phase 2: Service Enumeration (20 min)</div>
+                <div class="task-desc">Identify what software is running on each open port. Record the service name, version, and any additional information Nmap provides.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="4">
+              <input type="checkbox" id="t4">
+              <div class="task-body">
+                <div class="task-title">5 · Run an aggressive scan · Phase 2: Service Enumeration (20 min)</div>
+                <div class="task-desc">Combine service detection, OS detection, and traceroute. Note additional details: OS guess, service banners, and any script results.</div>
+                <div class="cmd-block">
+                  <pre>nmap -A 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="5">
+              <input type="checkbox" id="t5">
+              <div class="task-body">
+                <div class="task-title">6 · Scan all ports · Phase 2: Service Enumeration (20 min)</div>
+                <div class="task-desc">Nmap by default scans only the top 1000 ports. Scan all 65535. Did you find any additional ports? Record them.</div>
+                <div class="cmd-block">
+                  <pre>nmap -p- 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="6">
+              <input type="checkbox" id="t6">
+              <div class="task-body">
+                <div class="task-title">7 · Targeted port scan · Phase 2: Service Enumeration (20 min)</div>
+                <div class="task-desc">If you found a web server (port 80 or 8080), scan it in detail. This reveals directories, titles, and allowed HTTP methods.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV -p 8080 --script=http-enum,http-title,http-methods 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="7">
+              <input type="checkbox" id="t7">
+              <div class="task-body">
+                <div class="task-title">8 · Run vulnerability detection scripts · Phase 3: Vulnerability Detection (25 min)</div>
+                <div class="task-desc">Use NSE scripts to check for known vulnerabilities. The <code>vulners</code> script checks service versions against the CVE database. Record any CVEs found.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV --script=vulners 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="8">
+              <input type="checkbox" id="t8">
+              <div class="task-body">
+                <div class="task-title">9 · Run category-specific scripts · Phase 3: Vulnerability Detection (25 min)</div>
+                <div class="task-desc">Target specific vulnerability types. Replace the script categories with services relevant to your target.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV --script=ftp-anon,ssh-auth-methods,smb-vuln-* 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="9">
+              <input type="checkbox" id="t9">
+              <div class="task-body">
+                <div class="task-title">10 · Brute-force check (if applicable) · Phase 3: Vulnerability Detection (25 min)</div>
+                <div class="task-desc">If you found an SSH service, test if weak credentials are accepted. Use minimal attempts to avoid locking accounts.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV --script=ssh-brute --script-args userdb=/dev/null,passdb=/dev/null 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="10">
+              <input type="checkbox" id="t10">
+              <div class="task-body">
+                <div class="task-title">11 · Save scan output in XML format · Phase 3: Vulnerability Detection (25 min)</div>
+                <div class="task-desc">XML format allows programmatic parsing. This is critical for later analysis.</div>
+                <div class="cmd-block">
+                  <pre>nmap -sV -A --script=vulners -oX scan-results.xml 127.0.0.1</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="11">
+              <input type="checkbox" id="t11">
+              <div class="task-body">
+                <div class="task-title">12 · Write a Python script to parse the XML output · Phase 4: Python Analysis and Reporting (25 min)</div>
+                <div class="task-desc">Create <code>parse_scan.py</code> — extracts host, ports, services, and vulnerabilities from the XML. Run it and verify the JSON output.</div>
+                <div class="cmd-block">
+                  <pre>python3 parse_scan.py</pre>
+                  <button class="copy-btn">copy</button>
+                </div>
+              </div>
+            </div>
+            <div class="task" data-task="12">
+              <input type="checkbox" id="t12">
+              <div class="task-body">
+                <div class="task-title">13 · Generate a vulnerability report · Phase 4: Python Analysis and Reporting (25 min)</div>
+                <div class="task-desc">Extend your Python script to create a Markdown report with a findings table.</div>
+              </div>
+            </div>
+            <div class="task" data-task="13">
+              <input type="checkbox" id="t13">
+              <div class="task-body">
+                <div class="task-title">14 · Add CVE lookup · Phase 4: Python Analysis and Reporting (25 min)</div>
+                <div class="task-desc">For each vulnerability found, look up CVE details using the CIRCL API.</div>
+              </div>
+            </div>
+            <div class="task" data-task="14">
+              <input type="checkbox" id="t14">
+              <div class="task-body">
+                <div class="task-title">15 · Verify findings · Phase 5: Verification and Reporting (10 min)</div>
+                <div class="task-desc">For each vulnerability: Is this a false positive? What is the actual risk? What is the recommended fix?</div>
+              </div>
+            </div>
+            <div class="task" data-task="15">
+              <input type="checkbox" id="t15">
+              <div class="task-body">
+                <div class="task-title">16 · Complete the deliverables · Phase 5: Verification and Reporting (10 min)</div>
+                <div class="task-desc">Produce all five deliverable files.</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn" id="expandAll">Expand all hints</button>
+            <button class="btn danger" id="resetTasks">Reset lab progress</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deliverables">
+        <div class="card">
+          <h2><span class="num">04</span> Deliverables</h2>
+          <p class="dim">Everything lands in ~/cyber-labs/lab007/.</p>
+          <div class="deliverable">
+            <input type="checkbox" id="d0">
+            <span class="fname">scan-results.xml</span>
+            <span class="fdesc">The raw Nmap XML output from your scan.</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d1">
+            <span class="fname">parse_scan.py</span>
+            <span class="fdesc">Your Python script that parses the XML and generates a report.</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d2">
+            <span class="fname">parsed-results.json</span>
+            <span class="fdesc">The structured JSON output from your parser.</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d3">
+            <span class="fname">vulnerability-report.md</span>
+            <span class="fdesc">The generated vulnerability report (Markdown format).</span>
+          </div>
+          <div class="deliverable">
+            <input type="checkbox" id="d4">
+            <span class="fname">lab-report.md</span>
+            <span class="fdesc">The full report with methodology and recommendations.</span>
+          </div>
+          <textarea data-note="deliverable-notes" placeholder="Track your progress / where each file lives..."></textarea>
+        </div>
+      </section>
+
+      <section id="validation">
+        <div class="card">
+          <h2><span class="num">05</span> Self-Check</h2>
+          <p class="dim" style="margin-bottom:10px">Check yourself honestly — if the answer is no, fix your method before moving on.</p>
+          <div class="check-row">
+            <input type="checkbox" id="v0">
+            <span>Your <code>scan-results.xml</code> contains at least 5 open ports with service detection.</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v1">
+            <span>Your <code>parse_scan.py</code> runs without errors and produces valid JSON.</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v2">
+            <span>Your <code>vulnerability-report.md</code> includes a table of findings with at least one vulnerability documented (or a clear statement that none were found, with evidence of thorough scanning).</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v3">
+            <span>Your <code>lab-report.md</code> includes a methodology section and prioritised recommendations.</span>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="v4">
+            <span>You verified at least one finding manually (not just relying on the scanner's output).</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="assessment">
+        <div class="card">
+          <h2><span class="num">06</span> Assessment</h2>
+          <p class="dim" style="margin-bottom:14px">Answer in writing. Draft here, then copy into your report.</p>
+          <div class="qa">
+            <div class="q"><span class="qn">Q1</span>Why is service version detection (<code>-sV</code>) critical for vulnerability assessment? What could go wrong if you skip it?</div>
+            <textarea data-note="a1" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q2</span>The <code>vulners</code> script reports a CVE for a service. How do you determine if it is a false positive? Give two specific verification steps.</div>
+            <textarea data-note="a2" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q3</span>What is the difference between a vulnerability assessment and a penetration test? Why is it important to define the scope before scanning?</div>
+            <textarea data-note="a3" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q4</span>You found a vulnerability with a CVSS score of 9.8. Does this mean you should panic and patch immediately? What other factors influence prioritisation?</div>
+            <textarea data-note="a4" placeholder="Your answer..."></textarea>
+          </div>
+          <div class="qa">
+            <div class="q"><span class="qn">Q5</span>Your manager asks you to scan the company's production network. What should you do before running the scan? List three prerequisites.</div>
+            <textarea data-note="a5" placeholder="Your answer..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="notes">
+        <div class="card">
+          <h2><span class="num">07</span> Lab Notes</h2>
+          <p class="dim" style="margin-bottom:10px">Anything worth remembering — surprises, dead ends, commands you'll reuse. Saved locally in your browser.</p>
+          <textarea data-note="free-notes" style="min-height:180px" placeholder="What surprised you? What would you do differently? Which command saved you time?"></textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>cyber-labs · lab007 · interactive edition — progress auto-saved locally</footer>
+</div>
+
+<div class="toast" id="toast">Saved ✓</div>
+
+<script>
+(function () {
+  const KEY = 'cyberlab007';
+
+  let state = {
+    tasks: [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+    deliverables: [false,false,false,false,false],
+    checks: [false,false,false,false,false],
+    notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved) state = Object.assign(state, saved, {
+      notes: Object.assign(state.notes, saved.notes || {})
+    });
+  } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  let toastTimer;
+  const toast = document.getElementById('toast');
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+  }
+
+  const taskRows = document.querySelectorAll('.task input[type=checkbox]');
+  taskRows.forEach((cb, i) => {
+    cb.checked = !!state.tasks[i];
+    const row = cb.closest('.task');
+    if (cb.checked) row.classList.add('done');
+    cb.addEventListener('change', () => {
+      state.tasks[i] = cb.checked;
+      row.classList.toggle('done', cb.checked);
+      save(); renderProgress();
+    });
+  });
+
+  function renderProgress() {
+    const done = state.tasks.filter(Boolean).length;
+    const pct = Math.round((done / state.tasks.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = done + ' of ' + state.tasks.length + ' tasks complete';
+    const navCount = document.getElementById('navTaskCount');
+    if (navCount) navCount.textContent = done + '/' + state.tasks.length;
+  }
+
+  const dBoxes = ['d0', 'd1', 'd2', 'd3', 'd4'].map(id => document.getElementById(id));
+  dBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.deliverables[i];
+    cb.addEventListener('change', () => { state.deliverables[i] = cb.checked; save(); });
+  });
+  const vBoxes = ['v0', 'v1', 'v2', 'v3', 'v4'].map(id => document.getElementById(id));
+  vBoxes.forEach((cb, i) => {
+    if (!cb) return;
+    cb.checked = !!state.checks[i];
+    cb.addEventListener('change', () => { state.checks[i] = cb.checked; save(); });
+  });
+
+  document.querySelectorAll('textarea[data-note]').forEach(ta => {
+    const k = ta.getAttribute('data-note');
+    ta.value = state.notes[k] || '';
+    let deb;
+    ta.addEventListener('input', () => {
+      clearTimeout(deb);
+      deb = setTimeout(() => { state.notes[k] = ta.value; save(); }, 400);
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      const text = pre.innerText.replace(/^copy$/, '').trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1400);
+      });
+    });
+  });
+
+  document.getElementById('resetTasks').addEventListener('click', () => {
+    if (!confirm('Reset all task ticks, checklists and notes for this lab?')) return;
+    state = {
+      tasks: [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+      deliverables: [false,false,false,false,false],
+      checks: [false,false,false,false,false],
+      notes: { 'a1': '', 'a2': '', 'a3': '', 'a4': '', 'a5': '', 'free-notes': '', 'deliverable-notes': '' }
+    };
+    taskRows.forEach(cb => { cb.checked = false; cb.closest('.task').classList.remove('done'); });
+    dBoxes.forEach(cb => cb && (cb.checked = false));
+    vBoxes.forEach(cb => cb && (cb.checked = false));
+    document.querySelectorAll('textarea[data-note]').forEach(ta => ta.value = '');
+    save(); renderProgress();
+    showToast('Progress reset');
+  });
+
+  document.getElementById('expandAll').addEventListener('click', () => {
+    const ds = document.querySelectorAll('details');
+    const anyOpen = [...ds].some(d => d.open);
+    ds.forEach(d => d.open = !anyOpen);
+  });
+
+  const links = document.querySelectorAll('nav a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  window.addEventListener('scroll', () => {
+    let idx = 0;
+    sections.forEach((s, i) => {
+      if (s && s.getBoundingClientRect().top < 120) idx = i;
+    });
+    links.forEach((l, i) => l.classList.toggle('active', i === idx));
+  }, { passive: true });
+
+  renderProgress();
+})();
+</script>
+</body>
+</html>
